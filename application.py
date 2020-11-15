@@ -1,55 +1,38 @@
-#Import classes
-#url_for makes it easier to call certain url's that may be dynamic
+#SarsCoViz - Backend
+#^See Backend documentation at: https://bit.ly/SarsCoViz_Docn
+
 from datetime import datetime
-from flask import Flask, render_template, url_for, flash, request, redirect
-from flask_sqlalchemy import SQLAlchemy # Database ORM
+from flask import Flask, render_template, url_for, flash, request, redirect #^1
+from flask_sqlalchemy import SQLAlchemy # Database ORM ^2
 from forms import RegistrationForm, LoginForm
 import requests
 import csv
 
-"""object relational mapper (ORM) allows access of db in a simple, object-oriented way
-and can use diff db's w/o changing python code—just need to pass in diff url"""
-
-#Cosntructor sends app var to instance of Flask class & tells where to look for html's
+#Constructor sends app var to instance of Flask class & tells where to look
+#for template/html and static/CSS-Js files
 application = Flask(__name__, template_folder='./', static_folder="/")
-#app.config['TEMPLATES_AUTO_RELOAD'] = True
-application.config['SEND_FILE_MAX_AGE_DEFAULT'] = 0
-
-#Secret key: protects against modifying cookies, cross-site requests, forgery attacks, etc ****not public - hardcoded
+application.config['SEND_FILE_MAX_AGE_DEFAULT'] = 0 #Ensures pages reload
+#Secret key: protects against modifying cookies, cross-site requests, forgery
+#attacks, etc ****not public - hardcoded
 application.config['SECRET_KEY'] = 'dcf825233586379d01d31beb7d7b5306'
+#This will create a site.db file, w/ /// indicating relative path
+application.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///site.db'
 
-#This will create a site.db file
-application.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///site.db' # /// indicates relative path, for db file
 #Creates instance of database. Db structure will be of classes/models
-db = SQLAlchemy(application)
-""" This SQLAlchemy instance was called to create db structure in same diry as app w/: from application import
-    db; db.create_all(). Then models were imported: from application import User, Post. Could then add users &
-    posts: userObj = User(username='jack', email='jack@gmail.com', password='pass');
-    postObj = Post(title='Title', content='Content', user_id='user.id'); db.session.add(userObj);
-    db.session.commit() . Can clear db using db.drop_all()"""
-# User.query.all() shows all User objs; User.query.first()
-# User.query.filter_by(username='jackalakalaka') - .first() too
-# User.query.get(id)    # userObj.posts
+db = SQLAlchemy(application) #^3
 
-
-# User class inheriting from db.Model
-'''class User(db.Model):
-    
+#Define classes that inherit from db.Model ^4
+class User(db.Model):
     id = db.Column(db.Integer, primary_key=True)
-
     #20 is max username char limit; cannot be NULL—needs a username
     username = db.Column(db.String(20), unique=True, nullable=False)
-
     #120 is max email char limit; can't be null either
     email = db.Column(db.String(120), unique=True, nullable=False)
-    
     #propic doesn't need to be unique—users will have same default.jpg propic
-    #* - can add default propic \
+    #Can add default propic \
     image_file = db.Column(db.String(20), nullable=False, default='default.jpg')
-
     # Passwords will be hashed
     password = db.Column(db.String(60), nullable=False)
-
     """One to many relnship b/w (one) User & (many) Post classes. Backref adds
     another column to Post model with all of above-defnd user info. posts attr,
     in the background, queries a User's posts and other attributes; it is not a
@@ -57,40 +40,24 @@ db = SQLAlchemy(application)
     # For a Post obj, can use backref to get corresponding User obj: postObj.author
     # lazy gets all related posts rather than selected ones
     posts = db.relationship('Post', backref='author', lazy=True)
-
     #Double underscore ("dunder" or "magic") method w/ self - OO printing method
     #Def's how User obj is printed when printed out
     #repr?
-    def __repr__(self):
-
-        # Defs how a User obj is printed
+    def __repr__(self): # Defs how User obj is printed
         return f"User('{self.username}', '{self.email}', '{self.image_file}')"
-
-
-# Post class inheriting from db.Model
 class Post(db.Model):
-    
     id = db.Column(db.Integer, primary_key=True)
-
     title = db.Column(db.String(100), nullable=False)
-
     #Datetime column type; utcnow fn is passed into default as arg
     date_posted = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
-
     content = db.Column(db.Text, nullable=False)
-
     #Integer is related user's primary key; each post requires an author so not nullable
     """Referencing User db's table/column name w/ user.id, so lowercase as is default name
     for User. Same default name rule for Post class ("post")"""
     user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    def __repr__(self): # Defs how Post obj is printed
+        return f"Post('{self.title}', '{self.date_posted}')"
 
-    def __repr__(self):
-        # Defs how a Post obj is printed
-        return f"Post('{self.title}', '{self.date_posted}')"'''
-
-"""If want more info about user/author from a particular post, can call 'author'
-backref thing from User's posts attribute as if it were an attribute of Post to
-receive the info"""
 
 posts = [
     {
@@ -106,9 +73,6 @@ posts = [
     }
 ]
 
-"""Routes are what are typed into browser to go to diff pages"""
-
-
 
 #2 routes handled by same fn
 @application.route("/")
@@ -116,11 +80,9 @@ posts = [
 def home():
     return render_template("index.html", title='SARSCoViz - Plots')
 
-
 @application.route("/about")
 def about():
     return render_template("about.html", title='SARSCoViz - About')
-
 
 #Allows the following methods for user
 @application.route("/register", methods=['GET', 'POST'])
@@ -134,7 +96,6 @@ def register():
         return redirect(url_for('home'))
     return render_template('register.html', title='Register', form=form)
 
-
 @application.route("/login", methods=['GET', 'POST'])
 def login():
     form = LoginForm()
@@ -146,11 +107,9 @@ def login():
             flash('Login Unsuccessful. Please check username and password', 'danger')
     return render_template('login.html', title='Login', form=form)
 
-
 @application.route("/updates", methods=['GET','POST'])
 def updates():
     return render_template("updates.html", title='SARSCoViz - Updates', posts=posts)
-
 
 
 #Printing .text gives # of chars in str
