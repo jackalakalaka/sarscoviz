@@ -1,5 +1,6 @@
 #SarsCoViz - Backend
-#^See Backend documentation at: https://bit.ly/SarsCoViz_Docn
+#See Backend documentation (^ indicates notes) at: https://bit.ly/SarsCoViz_Docn
+#* - indicates an issue
 
 from datetime import datetime
 from flask import Flask, render_template, url_for, flash, request, redirect #^1
@@ -17,11 +18,14 @@ application.config['SEND_FILE_MAX_AGE_DEFAULT'] = 0 #Ensures pages reload
 application.config['SECRET_KEY'] = 'dcf825233586379d01d31beb7d7b5306'
 #This will create a site.db file, w/ /// indicating relative path
 application.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///site.db'
+application.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False #Disables default nofos
+
 
 #Creates instance of database. Db structure will be of classes/models
 db = SQLAlchemy(application) #^3
 
-#Define classes that inherit from db.Model ^4
+#Define classes that inherit from db.Model aka have their own db's ^4
+'''
 class User(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     #20 is max username char limit; cannot be NULL—needs a username
@@ -31,34 +35,31 @@ class User(db.Model):
     #propic doesn't need to be unique—users will have same default.jpg propic
     #Can add default propic \
     image_file = db.Column(db.String(20), nullable=False, default='default.jpg')
-    # Passwords will be hashed
-    password = db.Column(db.String(60), nullable=False)
-    """One to many relnship b/w (one) User & (many) Post classes. Backref adds
-    another column to Post model with all of above-defnd user info. posts attr,
-    in the background, queries a User's posts and other attributes; it is not a
-    column in the db"""
-    # For a Post obj, can use backref to get corresponding User obj: postObj.author
+    password = db.Column(db.String(60), nullable=False) # Pw's will be hashed
+
+    #One (User) to many (Post)s backref relationship
     # lazy gets all related posts rather than selected ones
     posts = db.relationship('Post', backref='author', lazy=True)
-    #Double underscore ("dunder" or "magic") method w/ self - OO printing method
-    #Def's how User obj is printed when printed out
-    #repr?
+
     def __repr__(self): # Defs how User obj is printed
         return f"User('{self.username}', '{self.email}', '{self.image_file}')"
+
 class Post(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     title = db.Column(db.String(100), nullable=False)
     #Datetime column type; utcnow fn is passed into default as arg
     date_posted = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
     content = db.Column(db.Text, nullable=False)
-    #Integer is related user's primary key; each post requires an author so not nullable
-    """Referencing User db's table/column name w/ user.id, so lowercase as is default name
-    for User. Same default name rule for Post class ("post")"""
+    #Integer is related user's primary key; posts need author, so not nullable
+    """Referencing User db's table/column name w/ user.id, so lowercase as is
+    default name for User. Same default name rule for Post class ("post")"""
     user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+
     def __repr__(self): # Defs how Post obj is printed
         return f"Post('{self.title}', '{self.date_posted}')"
+'''
 
-
+#Define posts dict
 posts = [
     {
         'author': 'Jack Carson',
@@ -74,9 +75,9 @@ posts = [
 ]
 
 
-#2 routes handled by same fn
+#Routes to particular pages
 @application.route("/")
-@application.route("/home")
+@application.route("/home") #another web addr option to same route
 def home():
     return render_template("index.html", title='SARSCoViz - Plots')
 
@@ -84,14 +85,12 @@ def home():
 def about():
     return render_template("about.html", title='SARSCoViz - About')
 
-#Allows the following methods for user
-@application.route("/register", methods=['GET', 'POST'])
+@application.route("/register", methods=['GET', 'POST']) #methods for user
 def register():
     form = RegistrationForm()
     if form.validate_on_submit():
         #Shows flash msg w/ success alert  category
-        #f signifies passing in a var
-        flash(f'Account created for {form.username.data}!', 'success')
+        flash(f'Account created for {form.username.data}', 'success')
         #Redirect function goes back to home page
         return redirect(url_for('home'))
     return render_template('register.html', title='Register', form=form)
@@ -112,85 +111,38 @@ def updates():
     return render_template("updates.html", title='SARSCoViz - Updates', posts=posts)
 
 
-#Printing .text gives # of chars in str
+#Fetch data from web
 COVID19DeathsByWeek_AgeSex = requests.get('https://data.cdc.gov/resource/vsak-wrfu.csv?$limit=200000')
-#Printing gives <Response [200]> which indicates GET success
-"""Can also use:
-if COVID19DeathsByWeek_AgeSex:
-    print('Response OK')
-else:
-    print('Response Failed')
-to see if GET success"""
-#Printing .text gives # of chars in str
-"""print(COVID19DeathsByWeek_AgeSex.headers) shows headers, w/ 'X-SODA2-Fields'
-preceding the data's headers"""
-
-#Get CADBD data
 COVID19CasesAndDeathsByDay = requests.get('https://data.cdc.gov/resource/9mfq-cb36.csv?$limit=200000')
 
-
-"""#Shows attr's & methods accessible in this resp obj
-print(dir(COVID19DeathsByWeek_AgeSex))
-#More detailed v of dir
-print(help(COVID19DeathsByWeek_AgeSex))
-#Gives content of resp in unicode
-print(COVID19DeathsByWeek_AgeSex.text)"""
-
-"""#Gets data and creates CSV file
-#new_csvReader printed would just show an obj in mem
-new_csvReader = csv.reader(COVID19DeathsByWeek_AgeSex.text)
-#Skips over first element
-next(new_csvReader)
-for element in new_csvReader:
-    print(element)"""
-
-
-
-#w indicates writing new file; a could be used to just append to file
-with open('temp_DBW_AS.csv', mode='w') as write1:
-    # lenCount=0
-    # for line in write1:
-    #     lenCount = lenCount + 1
-    # print(lenCount)
-    #Does nothing but create file pass
+'''* - this may be optimazable by parsing thru response obj's directly, rather
+than reading from and parsing thru a temporary csv file'''
+#Write response obj's to temporary csv files
+with open('temp_DBW_AS.csv', mode='w') as write1: #Deaths by wk: age, sex
     write1.write(COVID19DeathsByWeek_AgeSex.text)
-
-#Write CADBD data to temp csv file
-with open('temp_CADBD.csv', mode='w') as write2:
-    #Does nothing but create file pass
+with open('temp_CADBD.csv', mode='w') as write2: #Cases & deaths by day
     write2.write(COVID19CasesAndDeathsByDay.text)
 
 
+#* - WIP; turning what's below into functions, and the cases and deaths by day/week data is wrong
 
-#Read temp DBW_AS file, Process for relevant info
-with open('temp_DBW_AS.csv', 'r') as read1:
-    #csvReader is list of dics
-    #\t for tab delimiter if desired
-    csvReader = csv.DictReader(read1, delimiter=',')
-    #print(csvReader) prints addr of data
+#Context manager reads from temp csv files, parses out relevant info
+with open('temp_DBW_AS.csv', 'r') as read1: #Deaths by wk: age, sex
+    #DBW_AS_reader is an iterable of a list of dicts
+    DBW_AS_reader = csv.DictReader(read1, delimiter=',')
 
-    week_ending_date = []
-    sex = []
-    #Create new dic that doesn't diff by age, sex, data upload date, state, or week
-    DBW = []
+    DBW_A = [] #list of dicts: deaths by wk over age, plus general cause deaths
+    DBW = [] #list of dicts: deaths by wk, plus general cause deaths
 
-    DBW_A = []
     # Look at data for all sexes
-    for line in csvReader:
+    for line in DBW_AS_reader:
         if line['sex'] == 'All Sex':
-            DBW_A.append(line)
+            DBW_A.append(line) #Turn iterable into regular list
     
-    # Look at data for all ages in bottom-most rows of csv file.
-    # There are 12 age groups including 'All ages'.
-    '''DBW_len = len(DBW_A)/12
-    firstAllagesIndex = int(len(DBW_A) - DBW_len)
-    lastAllagesIndex = int(len(DBW_A)-1)
-    for i in range(firstAllagesIndex, lastAllagesIndex+1):
-        DBW.append(DBW_A[i])'''
+    # Look at data for all ages
     for line in DBW_A:
         if line['age_group']=='All Ages':
-            DBW.append(line)
-    
+            DBW.append(line) #Turn iterable into regular list
     for line in DBW:
         # Remove irrelevant columns
         del line['sex']
@@ -202,16 +154,13 @@ with open('temp_DBW_AS.csv', 'r') as read1:
         index = DBW.index(line)
         line['weekNum'] = index+1
 
+with open('temp_CADBD.csv', 'r') as read2: #Cases & deaths by day
+    #CADBD_reader is an iterable of a list of dicts
+    CADBD_reader = csv.DictReader(read2, delimiter=',')
 
-#Read temp CADBD file, Process for relevant info
-with open('temp_CADBD.csv', 'r') as read2:
-    #csvReader is list of dics
-    #\t for tab delimiter if desired
-    csvReader = csv.DictReader(read2, delimiter=',')
-    #Transfer each row (from csvReader addr obj?) to CADBD list (printable)
-    CADBD = []
-    for line in csvReader:
-        CADBD.append(line)
+    CADBD = [] #list of dicts: cases & deaths by day
+    for line in CADBD_reader:
+        CADBD.append(line) #Turn iterable into regular list line-by-line
     #Remove irrelevant rows from CADBD
     for line in CADBD:
         del line['new_case']
@@ -224,42 +173,44 @@ with open('temp_CADBD.csv', 'r') as read2:
         del line['conf_cases']
         del line['prob_cases']
         del line['conf_death']
-        del line['prob_death']
+        del line['prob_death'] 
     
-
-    #List (of 60 lists of dics) w/ an index for each of 60 states's daily case info, paired w/ CADBD_byState_labels
+    #List of 60 lists of dicts, w/ index for each state's daily case info
+    #60 states/regions total
+    #Paired w/ CADBD_byState_labels for construction
     CADBD_byState = [[], [], [], [], [], [], [], [], [], [],\
         [], [], [], [], [], [], [], [], [], [],\
         [], [], [], [], [], [], [], [], [], [],\
         [], [], [], [], [], [], [], [], [], [],\
         [], [], [], [], [], [], [], [], [], [],\
         [], [], [], [], [], [], [], [], [], []]
-    #List of labels for each state corresponding to CADBD_byState, starting w/ CO
-    CADBD_byState_labels = ['CO']
+    #State labels list that corresponds to by-day and by-wk lists
+    CADBD_byState_labels = ['CO'] #Will grow as CADBD_byState is filled
 
-    # For each line in CADBD indicates # of state {1 to 50+10}, as each state appears
-    # in top-bottom order in CADBD/temp_CADBD.csv
+    #For each line in CADBD indicates state # (as each state appears
+    #in top-bottom order in CADBD/temp_CADBD.csv)
     stateCount = 1
-    # Paired w/ stateCount, indicates label of each state. Starts w/ Colorado
+    #Related to stateCount, indicates label of each state. Starts w/ Colorado
     state = 'CO'
-    # Iterate thru each line and fills in CADBD_byState & CADBD_byState_labels
+    #Iterate thru each line and fills in CADBD_byState & CADBD_byState_labels
     for line in CADBD:
-        # When the state of interest changes, edits some vars
+        #When read state changes, alter state & statecount & append new info
         if state != line['state']:
-            # Set state equal to new state label,
-            state = line['state']
-            # increment stateCount,
-            stateCount=stateCount+1
-            # and add new state to correct labels list index.
-            CADBD_byState_labels.append(state)
-        # Remove line's 'state' key-value pair,
-        del line['state']
-        # and append remaining line to corresponding state's list in
-        # CADBD_byState
-        CADBD_byState[stateCount-1].append(line)#* - out of rnge
-    # end for
+            state = line['state'] #Set state equal to new state label
+            stateCount=stateCount+1 #Increment stateCount
+            CADBD_byState_labels.append(state) #Add new state to labels list
+        del line['state'] #Remove line's 'state' key-value pair
+        #Append altered line to corresponding nested state list in CADBD_byState
+        CADBD_byState[stateCount-1].append(line)
+    #end for
 
-    print('CO last day cases (>= last week cases):',CADBD_byState[0][-1]['tot_cases'])
+    print('THIS IS WRONG. Currently working on fixing it -Jack')
+    for i in range(0,60):
+        print(CADBD_byState_labels[i],'last day cases (>= last week cases):',CADBD_byState[i][-1]['tot_cases'],'and deaths (>= last week deaths)\
+        in nested list:',CADBD_byState[i][-1]['tot_death'])
+    
+    print('last day cases (>= last week cases):',CADBD[297]['tot_cases'],'and deaths (>= last week deaths) in og list:',\
+        CADBD[297]['tot_death'])
 
     #Convert CADBD_byState to CADBW_byState
     #List (of 60 lists of dics) w/ an index for each of 60 states's weekly case info
@@ -269,7 +220,7 @@ with open('temp_CADBD.csv', 'r') as read2:
         [], [], [], [], [], [], [], [], [], [],\
         [], [], [], [], [], [], [], [], [], [],\
         [], [], [], [], [], [], [], [], [], []]
-    #For each state in daily data, compile data to weekly
+    #For each state in daily data, change data to weekly
     for state, stateInfo in enumerate(CADBD_byState): #stateInfo is a list
         dayCnt = -1 #Rst day of wk counter for this state, including day 1Feb2020 as 1st wk
         weekCnt = 0 #Rst week counter {0 to n-1} for next state
@@ -310,8 +261,8 @@ with open('temp_CADBD.csv', 'r') as read2:
         for wkData in stateData:
             print(wkData)
         print('\n')"""
-    
-    print('CO last week cases:',CADBW_byState[0][-1]['tot_cases'])
+    for i in range(0,60):
+        print(CADBD_byState_labels[i],'last week cases:',CADBW_byState[i][-1]['tot_cases'],'and deaths:',CADBW_byState[i][-1]['tot_death'])
     '''#Convert CADBW_byState to CADBW
     CADBW = []
     numWeeks = CADBW_byState[0][-1]['weekNum']
@@ -363,9 +314,12 @@ with open('CADBD.csv', 'w', newline='') as write4: # newline='' removes spacing 
 # end with open('DBW_A.csv', 'w', newline='')'''
 
 
-
 #Run app in debug mode: removes need to restart server for every change
 """__name__ is __main__ if script is run w/ Python directly. So if we are debugging
 and running it directly then debug mode engages"""
 if __name__ == '__main__':
     application.run(debug=True)
+
+
+def totalToNew_byState():
+    pass
